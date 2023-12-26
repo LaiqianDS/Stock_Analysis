@@ -95,3 +95,56 @@ def cagr_from(data):
     cagr = ((last_price / initial_price) ** (1 / anyos) - 1)*100
 
     return round(cagr, 3)
+
+def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(date.today()), volume=False, 
+         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle'):
+    """
+    Dada una fecha de inicio y una fecha de fin, realiza el gráfico de la cotización dentro de ese período.
+    Si no hay fecha de fin, toma el último día de cotización.
+    Otros atributos:
+    - volume: boolean
+    - style= consult mpf.available_styles(), 'yahoo' is at default,
+    - title= str,
+    - ylabel= str,
+    - ylabel_lower=str, 
+    - savefig=str,
+    - type = lines/candles
+    Formato de fecha: YYYY-MM-DD
+    """
+
+    # Obtener los datos de cotización utilizando yfinance
+    data = get_prices(ticker, start=start_date, end=end_date)
+
+    # Normalización
+    if title=='': title = f'Cotización de {ticker}'
+    if ylabel=='': ylabel='Price'
+    if ylabel_lower=='': ylabel_lower='Volume'
+
+    # Graficar usando mplfinance
+    if savefig is None:
+        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower)
+    else:
+        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png')
+
+def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', volume=False):
+    """
+    Dado un dataset de cotizaciones, realiza un gráfico de su cotización.
+    Atributos:
+    - volume: boolean
+    - style= consult mpf.available_styles(), 'yahoo' is at default,
+    - title= str,
+    - ylabel= str,
+    - ylabel_lower=str, 
+    - savefig=str,
+    - type = lines/candles
+    """
+    # Normalización
+    if title=='': title = f'Cotización del dataset'
+    if ylabel=='': ylabel='Price'
+    if ylabel_lower=='': ylabel_lower='Volume'
+
+    # Graficar usando mplfinance
+    if savefig is None:
+        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower)
+    else:
+        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png')
