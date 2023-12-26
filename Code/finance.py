@@ -8,14 +8,14 @@ import yfinance as yf
 # Data Viz
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-import mplfinance as mpf
+import mplfinance as mpf # Matplotlib for finance
 from IPython.display import display
 import plotly.graph_objs as go
 
 # Funcionalidades
 
 #timedelta es para diferencias de tiempo, date es una clase
-from datetime import time, timedelta
+from datetime import date, datetime, timedelta
 
 
 ###########################
@@ -43,7 +43,7 @@ def pct_change(ticker, start_date=date.today()-timedelta(days=365), end_date=dat
     
     initial_price = data['Open'].iloc[0]  # Precio de apertura en start_date
     last_price = data['Close'].iloc[-1]  # Precio de cierre actual
-    percent_change = ((last_price - initial_price) / initial_price) * 100
+    percent_change = ((last_price - initial_price) / initial_price)
     
     return round(percent_change, 3)
 
@@ -56,7 +56,7 @@ def pct_change_from(data):
     
     initial_price = data['Open'].iloc[0]  # Precio de apertura en start_date
     last_price = data['Close'].iloc[-1]  # Precio de cierre actual
-    percent_change = ((last_price - initial_price) / initial_price) * 100
+    percent_change = ((last_price - initial_price) / initial_price)
     
     return round(percent_change, 3)
 
@@ -78,7 +78,7 @@ def cagr(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     initial_price = data['Open'].iloc[0]  # Precio de apertura en start_date
     last_price = data['Close'].iloc[-1]  # Precio de cierre actual
     
-    cagr = ((last_price / initial_price) ** (1 / anyos) - 1)*100
+    cagr = ((last_price / initial_price) ** (1 / anyos) - 1)
     return round(cagr, 3)
 
 def cagr_from(data):
@@ -92,7 +92,7 @@ def cagr_from(data):
 
     initial_price = data['Open'].iloc[0]  # Precio de apertura en start_date
     last_price = data['Close'].iloc[-1]  # Precio de cierre actual
-    cagr = ((last_price / initial_price) ** (1 / anyos) - 1)*100
+    cagr = ((last_price / initial_price) ** (1 / anyos) - 1)
 
     return round(cagr, 3)
 
