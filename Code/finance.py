@@ -33,9 +33,9 @@ def get_prices(ticker, start=date.today()-timedelta(days=365), end=date.today())
 
 def get_info(ticker):
     """
-    Dado un ticker, carga datos de la empresa. Acepta varios tickers.
+    Dado un ticker, carga datos de la empresa.
     """
-    return [yf.Ticker(t).info for t in ticker]
+    return yf.Ticker(ticker).info
 
 def repr_info(info, ticker, description=False):
     """
@@ -48,7 +48,8 @@ def repr_info(info, ticker, description=False):
         'margins': ['profitMargins', 'grossMargins', 'ebitdaMargins', 'operatingMargins'],
         'returns': ['returnOnAssets', 'returnOnEquity']
     }
-    
+
+    # Imprimo toda la info
     print(f'Información de la empresa: {ticker.upper()}')
     
     if description:
@@ -69,6 +70,7 @@ def repr_info(info, ticker, description=False):
             print(f'5 Years CAGR: {cagr(ticker, start_date=date.today()-timedelta(days=365*5))}')
         print('\n')
 
+    # Printeo si ha habido algún dato que no ha podido ser mostrado
     if len(not_seen) > 0: print(f'Los siguientes datos no se pudieron mostrar: {not_seen}')
 
 def load_repr_info(ticker, desc=False):
@@ -77,8 +79,7 @@ def load_repr_info(ticker, desc=False):
     Pide el ticker de la empresa y el booleano para la descripción
     IMPORTANTE: No acepta más de un ticker
     """
-    repr_info(get_info(ticker)[0], ticker, desc)
-    
+    repr_info(get_info(ticker), ticker, desc)
     
 def pct_change(ticker, start_date=date.today()-timedelta(days=365), end_date=date.today()):
     """
@@ -155,8 +156,35 @@ def cagr_from(data):
 
     return round(cagr, 4)
 
+def plot_macd(data):
+    """
+    Función auxiliar para añadir el macd en el gráfico de la función plot().
+    Recibe el dataframe de las cotizaciones.
+    Las medias utilizadas en el macd o Moving Average Convergence Divergence son de longitud 9, 12 y 26.
+    En el MACD: 
+    Si la línea MACD está por encima de cero, tendencia bullish
+    Si la línea MACD está por debajo de cero, tendencia bearish
+    La estrategia básica suele combinar histograma y MACD, tal que, si el MACD sobresale del histograma:
+    Por debajo del nivel cero, oportunidad de compra
+    Por encima del nivel cero, oportunidad de venta
+    """
+
+    # Calcular el indicador MACD y el histograma
+    exp12 = data['Close'].ewm(span=12, min_periods=0, adjust=False).mean() #ewm es media exponencial
+    exp26 = data['Close'].ewm(span=26, min_periods=0, adjust=False).mean()
+    macd = exp12 - exp26
+    signal = macd.ewm(span=9, min_periods=0, adjust=False).mean()
+    histogram = macd-signal
+
+    # Añadimos los addplots
+    apds = [mpf.make_addplot(histogram,type='bar',width=0.7,panel=1,
+                             color='dimgray',alpha=1,secondary_y=False),
+            mpf.make_addplot(signal,panel=1,color='orange',secondary_y=True)
+           ]
+    return apds
+
 def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(date.today()), volume=False, 
-         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False):
+         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False, macd=False):
     """
     Dada una fecha de inicio y una fecha de fin, realiza el gráfico de la cotización dentro de ese período.
     Si no hay fecha de fin, toma el último día de cotización. 
@@ -170,9 +198,9 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     - type = lines/candles
     - sma = tuple
     - info= boolean, muestra por pantalla información general de la empresa
+    - macd= boolean, muestra el MACD
     Formato de fecha: YYYY-MM-DD
     """
-
     # Obtener los datos de cotización utilizando yfinance
     data = get_prices(ticker, start=start_date, end=end_date)
 
@@ -181,11 +209,18 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     if ylabel=='': ylabel='Price'
     if ylabel_lower=='': ylabel_lower='Volume'
 
-    # Graficar usando mplfinance
-    if savefig is None:
-        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+    # Adición de ténicos y graficación
+    if macd: 
+        ap = plot_macd(data)
+        if savefig is None:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     else:
-        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+        if savefig is None:
+            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     if info:
         load_repr_info(ticker)
 
@@ -241,3 +276,4 @@ def compare(dataframes, names):
     fig, axes = mpf.plot(primer_df, addplot=added_plots, type='line', volume=False,
                          ylabel='Precio', title='Cotizaciones de Empresas', returnfig=True)
     axes[0].legend(names)    
+
