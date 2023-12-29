@@ -16,11 +16,15 @@ import plotly.graph_objs as go
 
 #timedelta es para diferencias de tiempo, date es una clase
 from datetime import date, datetime, timedelta
-
+import numpy as np
 
 ###########################
 # Definición de funciones #
 ###########################
+
+###########
+# General #
+###########
 
 def get_prices(ticker, start=date.today()-timedelta(days=365), end=date.today()):
     """
@@ -80,6 +84,10 @@ def load_repr_info(ticker, desc=False):
     IMPORTANTE: No acepta más de un ticker
     """
     repr_info(get_info(ticker), ticker, desc)
+
+############
+# Cálculos #
+############
     
 def pct_change(ticker, start_date=date.today()-timedelta(days=365), end_date=date.today()):
     """
@@ -156,7 +164,11 @@ def cagr_from(data):
 
     return round(cagr, 4)
 
-def plot_macd(data):
+#################
+# Visualización #
+#################
+
+def add_macd(data):
     """
     Función auxiliar para añadir el macd en el gráfico de la función plot().
     Recibe el dataframe de las cotizaciones.
@@ -183,8 +195,44 @@ def plot_macd(data):
            ]
     return apds
 
+def relative_strength(prices, n=14):
+    """
+    Función que calcula el índice relativo de fuerza o RSI.
+    Se ha obtenido ayuda bibliográfica para su diseño. Consulta: 
+    https://github.com/matplotlib/mplfinance/blob/master/examples/indicators/mpf_rsi_demo.py
+    """
+    deltas = np.diff(prices)
+    seed = deltas[:n + 1]
+    up = seed[seed >= 0].sum() / n
+    down = -seed[seed < 0].sum() / n
+    rs = up / down
+    rsi = np.zeros_like(prices)
+    rsi[:n] = 100. - 100. / (1. + rs)
+
+    for i in range(n, len(prices)):
+        delta = deltas[i - 1]
+
+        if delta > 0:
+            upval = delta
+            downval = 0.
+        else:
+            upval = 0.
+            downval = -delta
+
+        up = (up * (n - 1) + upval) / n
+        down = (down * (n - 1) + downval) / n
+
+        rs = up / down
+        rsi[i] = 100. - 100. / (1. + rs)
+    return rsi
+
+def add_rsi(data):
+    data['rsi'] = relative_strength(data['Close'],n=7)    
+    apd = [mpf.make_addplot(data['rsi'], panel=1, color='lime',ylim=(10,90),secondary_y=True)]
+    return apd
+
 def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(date.today()), volume=False, 
-         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False, macd=False):
+         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False, macd=False, rsi=False):
     """
     Dada una fecha de inicio y una fecha de fin, realiza el gráfico de la cotización dentro de ese período.
     Si no hay fecha de fin, toma el último día de cotización. 
@@ -199,6 +247,9 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     - sma = tuple
     - info= boolean, muestra por pantalla información general de la empresa
     - macd= boolean, muestra el MACD
+    - rsi = boolean, muestra el RSI.
+    NOTA SOBRE INDICADORES: Por convención, la presencia de un indicador excluirá los demás, puedes plotear varios llamando varias veces al método plot
+    Orden: macd > rsi > bollinger
     Formato de fecha: YYYY-MM-DD
     """
     # Obtener los datos de cotización utilizando yfinance
@@ -211,7 +262,13 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
 
     # Adición de ténicos y graficación
     if macd: 
-        ap = plot_macd(data)
+        ap = add_macd(data) 
+        if savefig is None:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+    elif rsi:
+        ap = add_rsi(data)
         if savefig is None:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
         else:
@@ -224,7 +281,7 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     if info:
         load_repr_info(ticker)
 
-def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', volume=False, sma=()):
+def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', volume=False, sma=(), macd=False, rsi=False):
     """
     Dado un dataset de cotizaciones, realiza un gráfico de su cotización.
     Atributos:
@@ -242,11 +299,24 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
     if ylabel=='': ylabel='Price'
     if ylabel_lower=='': ylabel_lower='Volume'
 
-    # Graficar usando mplfinance
-    if savefig is None:
-        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+    # Adición de ténicos y graficación
+    if macd: 
+        ap = add_macd(data) 
+        if savefig is None:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+    elif rsi:
+        ap = add_rsi(data)
+        if savefig is None:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     else:
-        mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+        if savefig is None:
+            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        else:
+            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
 
 def compare(dataframes, names):
     """
@@ -276,4 +346,3 @@ def compare(dataframes, names):
     fig, axes = mpf.plot(primer_df, addplot=added_plots, type='line', volume=False,
                          ylabel='Precio', title='Cotizaciones de Empresas', returnfig=True)
     axes[0].legend(names)    
-
