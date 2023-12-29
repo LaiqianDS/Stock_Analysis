@@ -231,8 +231,48 @@ def add_rsi(data):
     apd = [mpf.make_addplot(data['rsi'], panel=1, color='lime',ylim=(10,90),secondary_y=True)]
     return apd
 
+def bbands(data):
+    """
+    Las bandas de bollinger son un indicador técnico compuesto de tres bandas: superior, inferior e intermedia.
+    Se basan en la media y la desviación típica, y el Teorema de Chebyshev.
+    Upper Band = MA + K ⋅ σ
+    Middle Band = MA
+    Lower Band = MA − K ⋅ σ
+    Donde:
+    MA es una media movil (generalmente de longitud 20)
+    K es el número de desviaciones estándares (typically set to 2)
+    σ es la desviación estándar
+    Esta función devuelve un dataframe con las bandas (sup. e inf.) y el nivel porcentaje de la cotización dentro de la banda (0% es la media móvil).
+    """
+    # Calcular la media móvil
+    data['SMA'] = data['Close'].rolling(window=20).mean()
+
+    # Calcular la desviación estándar
+    data['std_dev'] = data['Close'].rolling(window=20).std()
+
+    # Calcular las bandas superior e inferior de Bollinger
+    data['Banda_Superior'] = data['SMA'] + (data['std_dev'] * 2)
+    data['Banda_Inferior'] = data['SMA'] - (data['std_dev'] * 2)
+
+    # Calcular el nivel porcentaje 
+    data['percentB'] = (data['Close'] - data['Banda_Inferior']) / (data['Banda_Superior'] - data['Banda_Inferior'])
+    return data
+
+def add_bbands(data):
+    """
+    Crea el objeto make_addplot para añadir las bandas de bollinger.
+    Recibe un dataset de cotizaciones
+    """
+    new_data = bbands(data)
+    ap = [
+          mpf.make_addplot(data['Banda_Inferior'], color='red'),
+          mpf.make_addplot(data['Banda_Superior'], color='green'),
+          mpf.make_addplot(data['SMA'], color='gray')
+         ]
+    return ap
+
 def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(date.today()), volume=False, 
-         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False, macd=False, rsi=False):
+         style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', sma=(), info=False, macd=False, rsi=False, bollinger=False):
     """
     Dada una fecha de inicio y una fecha de fin, realiza el gráfico de la cotización dentro de ese período.
     Si no hay fecha de fin, toma el último día de cotización. 
@@ -248,8 +288,9 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
     - info= boolean, muestra por pantalla información general de la empresa
     - macd= boolean, muestra el MACD
     - rsi = boolean, muestra el RSI.
+    - bollinger = boolean, muestra las bandas de bollinger
     NOTA SOBRE INDICADORES: Por convención, la presencia de un indicador excluirá los demás, puedes plotear varios llamando varias veces al método plot
-    Orden: macd > rsi > bollinger
+    Orden: macd > rsi 
     Formato de fecha: YYYY-MM-DD
     """
     # Obtener los datos de cotización utilizando yfinance
@@ -262,26 +303,35 @@ def plot(ticker, start_date=str(date.today()-timedelta(days=365)), end_date=str(
 
     # Adición de ténicos y graficación
     if macd: 
-        ap = add_macd(data) 
+        ap = add_macd(data)
+        if bollinger: ap.extend(add_bbands(data))
         if savefig is None:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
         else:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     elif rsi:
         ap = add_rsi(data)
+        if bollinger: ap.extend(add_bbands(data))
         if savefig is None:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
         else:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     else:
-        if savefig is None:
-            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        if bollinger: 
+            ap = add_bbands(data)
+            if savefig is None:
+                mpf.plot(data, type=type, volume=volume, addplot=ap, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+            else:
+                mpf.plot(data, type=type, volume=volume, addplot=ap, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
         else:
-            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+            if savefig is None:
+                mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+            else:
+                mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     if info:
         load_repr_info(ticker)
 
-def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', volume=False, sma=(), macd=False, rsi=False):
+def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig=None, type='candle', volume=False, sma=(), macd=False, rsi=False, bollinger=False):
     """
     Dado un dataset de cotizaciones, realiza un gráfico de su cotización.
     Atributos:
@@ -293,6 +343,11 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
     - savefig=str,
     - type = lines/candles
     - sma = tuple or list
+    - macd= boolean, muestra el MACD
+    - rsi = boolean, muestra el RSI
+    - bollinger = boolean, muestra las bandas de bollinger
+    NOTA SOBRE INDICADORES: Por convención, la presencia de un indicador excluirá los demás, puedes plotear varios llamando varias veces al método plot
+    Orden: macd > rsi 
     """
     # Normalización
     if title=='': title = f'Cotización del dataset'
@@ -301,22 +356,31 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
 
     # Adición de ténicos y graficación
     if macd: 
-        ap = add_macd(data) 
+        ap = add_macd(data)
+        if bollinger: ap.extend(add_bbands(data))
         if savefig is None:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
         else:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     elif rsi:
         ap = add_rsi(data)
+        if bollinger: ap.extend(add_bbands(data))
         if savefig is None:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
         else:
             mpf.plot(data, type=type, addplot=ap, volume=volume, volume_panel=2, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
     else:
-        if savefig is None:
-            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+        if bollinger: 
+            ap = add_bbands(data)
+            if savefig is None:
+                mpf.plot(data, type=type, volume=volume, addplot=ap, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+            else:
+                mpf.plot(data, type=type, volume=volume, addplot=ap, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
         else:
-            mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
+            if savefig is None:
+                mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, mav=(sma))
+            else:
+                mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
 
 def compare(dataframes, names):
     """
