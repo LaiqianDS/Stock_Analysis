@@ -17,6 +17,7 @@ import plotly.graph_objs as go
 #timedelta es para diferencias de tiempo, date es una clase
 from datetime import date, datetime, timedelta
 import numpy as np
+import pandas as pd
 
 ###########################
 # Definición de funciones #
@@ -34,6 +35,13 @@ def get_prices(ticker, start=date.today()-timedelta(days=365), end=date.today())
     Es importante decir que el primer dato puede ser POSTERIOR al dado, pues puede haber empezado a cotizar después de la fecha proporcionada    
     """
     return yf.download(ticker, start=start, end=end, progress=False).dropna()
+
+def get_prices_detailed(ticker, period='1y'):
+    """
+    Función similar a get_prices, pero utilizando la función yf.Ticker.history()
+    Algunos ejemplos de period es 1y, 1w, 1mo, 1m
+    """
+    return yf.Ticker(ticker).history(period=period)
 
 def get_info(ticker):
     """
@@ -164,37 +172,6 @@ def cagr_from(data):
 
     return round(cagr, 4)
 
-#################
-# Visualización #
-#################
-
-def add_macd(data):
-    """
-    Función auxiliar para añadir el macd en el gráfico de la función plot().
-    Recibe el dataframe de las cotizaciones.
-    Las medias utilizadas en el macd o Moving Average Convergence Divergence son de longitud 9, 12 y 26.
-    En el MACD: 
-    Si la línea MACD está por encima de cero, tendencia bullish
-    Si la línea MACD está por debajo de cero, tendencia bearish
-    La estrategia básica suele combinar histograma y MACD, tal que, si el MACD sobresale del histograma:
-    Por debajo del nivel cero, oportunidad de compra
-    Por encima del nivel cero, oportunidad de venta
-    """
-
-    # Calcular el indicador MACD y el histograma
-    exp12 = data['Close'].ewm(span=12, min_periods=0, adjust=False).mean() #ewm es media exponencial
-    exp26 = data['Close'].ewm(span=26, min_periods=0, adjust=False).mean()
-    macd = exp12 - exp26
-    signal = macd.ewm(span=9, min_periods=0, adjust=False).mean()
-    histogram = macd-signal
-
-    # Añadimos los addplots
-    apds = [mpf.make_addplot(histogram,type='bar',width=0.7,panel=1,
-                             color='dimgray',alpha=1,secondary_y=False),
-            mpf.make_addplot(signal,panel=1,color='orange',secondary_y=True)
-           ]
-    return apds
-
 def relative_strength(prices, n=14):
     """
     Función que calcula el índice relativo de fuerza o RSI.
@@ -226,11 +203,6 @@ def relative_strength(prices, n=14):
         rsi[i] = 100. - 100. / (1. + rs)
     return rsi
 
-def add_rsi(data):
-    data['rsi'] = relative_strength(data['Close'],n=7)    
-    apd = [mpf.make_addplot(data['rsi'], panel=1, color='lime',ylim=(10,90),secondary_y=True)]
-    return apd
-
 def bbands(data):
     """
     Las bandas de bollinger son un indicador técnico compuesto de tres bandas: superior, inferior e intermedia.
@@ -257,6 +229,46 @@ def bbands(data):
     # Calcular el nivel porcentaje 
     data['percentB'] = (data['Close'] - data['Banda_Inferior']) / (data['Banda_Superior'] - data['Banda_Inferior'])
     return data
+
+
+#################
+# Visualización #
+#################
+
+def add_rsi(data):
+    """
+    Crea el objeto make_addplot para añadir el rsi al gráfico
+    """
+    data['rsi'] = relative_strength(data['Close'],n=7)    
+    apd = [mpf.make_addplot(data['rsi'], panel=1, color='lime',ylim=(10,90),secondary_y=True)]
+    return apd
+
+def add_macd(data):
+    """
+    Función auxiliar para añadir el macd en el gráfico de la función plot().
+    Recibe el dataframe de las cotizaciones.
+    Las medias utilizadas en el macd o Moving Average Convergence Divergence son de longitud 9, 12 y 26.
+    En el MACD: 
+    Si la línea MACD está por encima de cero, tendencia bullish
+    Si la línea MACD está por debajo de cero, tendencia bearish
+    La estrategia básica suele combinar histograma y MACD, tal que, si el MACD sobresale del histograma:
+    Por debajo del nivel cero, oportunidad de compra
+    Por encima del nivel cero, oportunidad de venta
+    """
+
+    # Calcular el indicador MACD y el histograma
+    exp12 = data['Close'].ewm(span=12, min_periods=0, adjust=False).mean() #ewm es media exponencial
+    exp26 = data['Close'].ewm(span=26, min_periods=0, adjust=False).mean()
+    macd = exp12 - exp26
+    signal = macd.ewm(span=9, min_periods=0, adjust=False).mean()
+    histogram = macd-signal
+
+    # Añadimos los addplots
+    apds = [mpf.make_addplot(histogram,type='bar',width=0.7,panel=1,
+                             color='dimgray',alpha=1,secondary_y=False),
+            mpf.make_addplot(signal,panel=1,color='orange',secondary_y=True)
+           ]
+    return apds
 
 def add_bbands(data):
     """
@@ -382,12 +394,15 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
             else:
                 mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
 
-def compare(dataframes, names):
+def compare(names):
     """
-    Recibe una lista con los datos (df) de una o varias empresas con el mismo eje temporal y realiza una gráfica de lineas con todas
-    Ambos parámetros deben ser listas
+    Recibe una lista con los tickers de una o varias empresas y realiza una gráfica de lineas con todas
+    Debe ser una lista
     """
     # Iterar sobre la lista de DataFrames y generar un nuevo dataframe
+    if isinstance(names, list):
+        dataframes = [get_prices(name) for name in names]
+    
     new_df = pd.DataFrame()
     l_names = []
     for i in range(len(names)-1):
@@ -409,4 +424,5 @@ def compare(dataframes, names):
     # Crear el gráfico con mplfinance y añadir los addplots
     fig, axes = mpf.plot(primer_df, addplot=added_plots, type='line', volume=False,
                          ylabel='Precio', title='Cotizaciones de Empresas', returnfig=True)
-    axes[0].legend(names)    
+    axes[0].legend(names)
+    
