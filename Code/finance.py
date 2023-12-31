@@ -11,6 +11,7 @@ import ipywidgets as widgets
 import mplfinance as mpf # Matplotlib for finance
 from IPython.display import display
 import plotly.graph_objs as go
+import seaborn as sns
 
 # Funcionalidades
 
@@ -394,23 +395,43 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
             else:
                 mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
 
+def correlation(dataframes):
+    """
+    Recibe una lista de dataframes y devuelve las correlaciones entre pares de activos
+    """
+    nombres_dataframes = [f'DF{i+1}' for i in range(len(dataframes))]
+
+    correlaciones = pd.DataFrame(index=nombres_dataframes, columns=nombres_dataframes)
+
+    for i, df1 in enumerate(dataframes):
+        for j, df2 in enumerate(dataframes):
+            correlacion = df1['Open'].corr(df2['Open'])
+            correlaciones.iloc[i, j] = correlacion
+
+    # Graficar el mapa de calor de las correlaciones
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(correlaciones.astype(float), annot=True, cmap='coolwarm', fmt='.2f', vmin=-1, vmax=1)
+    plt.title('Correlación entre activos')
+    plt.xlabel('DataFrames')
+    plt.ylabel('DataFrames')
+    plt.show()
+    
 def compare(names):
     """
-    Recibe una lista con los tickers de una o varias empresas y realiza una gráfica de lineas con todas
-    Debe ser una lista
+    Recibe una lista con los datos (df) de una o varias empresas con el mismo eje temporal y realiza una gráfica de lineas con todas
+    Ambos parámetros deben ser listas
     """
-    # Iterar sobre la lista de DataFrames y generar un nuevo dataframe
+    # Genera los dataframes
     if isinstance(names, list):
-        dataframes = [get_prices(name) for name in names]
+        dataframes = [get_prices_detailed(name) for name in names]
     
+    # Iterar sobre la lista de DataFrames y generar un nuevo dataframe
     new_df = pd.DataFrame()
-    l_names = []
-    for i in range(len(names)-1):
-        new_df[names[i+1]] = dataframes[i+1]['Open']
-        l_names.append(names[i+1])
+    for i in range(len(names)):
+        new_df[names[i]] = dataframes[i]['Close']
 
-    added_plots = mpf.make_addplot(new_df[l_names])
-    
+    added_plots = mpf.make_addplot(new_df[names[1:]], secondary_y=False)
+
     """
     Ejemplo de addplots (guía oficial)
     tcdf = df[['LowerB','UpperB']]  # DataFrame with two columns
@@ -424,5 +445,7 @@ def compare(names):
     # Crear el gráfico con mplfinance y añadir los addplots
     fig, axes = mpf.plot(primer_df, addplot=added_plots, type='line', volume=False,
                          ylabel='Precio', title='Cotizaciones de Empresas', returnfig=True)
-    axes[0].legend(names)
+    axes[0].legend(names)    
+
+    correlation(dataframes)
     
