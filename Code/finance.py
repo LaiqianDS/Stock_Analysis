@@ -1,24 +1,25 @@
-############################
-# Importación de librerías #
-############################
-
 # API Yahoo
 import yfinance as yf
 
+# Scrapping
+import requests
+from bs4 import BeautifulSoup
+
 # Data Viz
 import matplotlib.pyplot as plt
-import ipywidgets as widgets
-import mplfinance as mpf # Matplotlib for finance
+import mplfinance as mpf
 from IPython.display import display
-import plotly.graph_objs as go
 import seaborn as sns
 
 # Funcionalidades
-
 #timedelta es para diferencias de tiempo, date es una clase
 from datetime import date, datetime, timedelta
-import numpy as np
 import pandas as pd
+import numpy as np
+import csv
+from ipywidgets import widgets, interact
+from scipy.stats import ttest_ind # comparacion de medias
+
 
 ###########################
 # Definición de funciones #
@@ -419,7 +420,7 @@ def correlation(dataframes):
 def compare(names):
     """
     Recibe una lista con los datos (df) de una o varias empresas con el mismo eje temporal y realiza una gráfica de lineas con todas
-    Ambos parámetros deben ser listas
+    EL parámetro deben ser lista
     """
     # Genera los dataframes
     if isinstance(names, list):
@@ -448,4 +449,82 @@ def compare(names):
     axes[0].legend(names)    
 
     correlation(dataframes)
+
+#########################
+# Impacto de resultados #
+#########################
     
+def scrap_results(ticker):
+    """
+    Recibe un ticker y, utilizando beautifulSoup, obtiene los resultados de las 4 últimas presentaciones y devuelve
+    una lista de tuplas (diferencia, % diferencia) y una lista con las fechas con formato MM/DD/YYYY. 
+    """
+    # Establecemos una sesión
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0"}
+    
+    # Obtenemos los datos
+    src = requests.get(f"https://finance.yahoo.com/quote/{ticker}/analysis?p={ticker}", headers=headers)
+    if src.status_code == 200:
+        soup = BeautifulSoup(src.content, 'html.parser')
+        earning_history = soup.find_all("table", class_="W(100%) M(0) BdB Bdc($seperatorColor) Mb(25px)")[2] # 3a tabla de la web
+        dates = earning_history.find_all('th', class_="Fw(400) W(20%) Fz(xs) C($tertiaryColor) Ta(end)") # table headers con las fechas
+        l_dates = [date.renderContents().decode()[6:-7] for date in dates] # coge el texto, decodifica y guarda quitando texto sobrante
+        data = earning_history.find_all('td', class_="Ta(end)") # coge todos los datos de la tabla
+        l_data = list(zip([d.renderContents().decode() for d in data[-8:-4:]], [d.renderContents().decode() for d in data[-4:]])) # lista de tuplas con los que queremos
+        
+        return l_data, l_dates
+    else: raise ValueError('Couldn\'t get stock info')
+
+def results_to_dataframe(ticker):
+    """
+    Recibe un ticker y carga los datos de los últimos 4 anuncios de resultados llamando a la función
+    scrap_results(). Posteriormente, convierte las listas recibidas en un Dataframe.
+    Dicho dataframe tiene fechas como índice y las columnas Difference y Difference %
+    """
+    data, dates = scrap_results(ticker) # Carga los datos
+
+    # Creamos el dataframe
+    dic = {'Date': dates, 'Difference': [d[0] for d in data], 'Difference %': [d[1] for d in data]} 
+    res = pd.DataFrame(dic)
+
+    # Ajustamos y modificamos el índice
+    res['Date'] = pd.to_datetime(res['Date'])
+    res = res.set_index('Date')
+    
+    return res
+
+def results_impact(ticker):
+    """
+    Función que hace un wrap de scrap_results y results_to_dataframe
+    Posteriormente, realiza la prueba t de Student de comparación de medias
+    para medir si el impacto de los resultados ha sido significativo
+    tal que las medias son diferentes en el período previo frente al posterior
+    El resultado es un diccionario con las fechas de los resultados como claves
+    y un booleano indicando diferencia de medias como valor
+    """
+    results = results_to_dataframe(ticker)
+    
+    # Normalizo las fechas del DataFrame results
+    results.index = pd.to_datetime(results.index, format = '%m/%d/%Y').strftime('%Y-%m-%d')
+    impact = {}
+    
+    for fecha in results.index:
+        # Obtener datos históricos de precios de una acción (por ejemplo, Apple)
+        window_size = 10  # Número de días antes y después del evento
+
+        # Convertir la fecha del evento a timestamp
+        fecha = pd.Timestamp(fecha)
+
+        # Crear un rango de fechas hábiles que incluya la ventana de tiempo, pues hay festivos, etc.
+        # freq = 'B' es para días laborales
+        rango_previo = pd.date_range(end=fecha, periods=window_size, freq='B')  # Para días antes del evento
+        rango_posterior = pd.date_range(start=fecha, periods=window_size + 1, freq='B')  # Para días después del evento
+
+        # Obtener los precios de acciones para el rango de fechas ajustado a días hábiles
+        pre = get_prices(ticker, start=rango_previo.min(), end=rango_previo.max())
+        post = get_prices(ticker, start=rango_posterior.min(), end=rango_posterior.max())
+        
+        # Realizar la prueba t de Student de comparacion de medias
+        t_stat, p_value = ttest_ind(pre['Close'], post['Close'])
+        impact[str(fecha)] = p_value < 0.05
+    return impact
