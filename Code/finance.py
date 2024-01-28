@@ -55,7 +55,7 @@ def repr_info(info, ticker, description=False):
     """
     Recibe un diccionario resultante de llamar a la función get_info() y  muestra por pantalla los datos más relevantes
     """
-    # Datos más relevantes a elleción del programador
+    # Datos más relevantes a eleción del programador
     info_d = {
         'general': ['country', 'website', 'industry', 'sector', 'fullTimeEmployees', 'dividendYield', 'beta', 'marketCap',  'currency', 'enterpriseValue', 'fiftyTwoWeekLow', 'fiftyTwoWeekHigh'],
         'financials': ['trailingPE', 'forwardPE', 'trailingEps', 'forwardEps', 'targetHighPrice', 'targetLowPrice', 'freeCashflow', 'operatingCashflow', 'earningsGrowth', 'revenueGrowth'],
@@ -180,7 +180,7 @@ def relative_strength(prices, n=14):
     Se ha obtenido ayuda bibliográfica para su diseño. Consulta: 
     https://github.com/matplotlib/mplfinance/blob/master/examples/indicators/mpf_rsi_demo.py
     """
-    deltas = np.diff(prices)
+    deltas = np.diff(prices) # array de diferencias
     seed = deltas[:n + 1]
     up = seed[seed >= 0].sum() / n
     down = -seed[seed < 0].sum() / n
@@ -277,7 +277,7 @@ def add_bbands(data):
     Crea el objeto make_addplot para añadir las bandas de bollinger.
     Recibe un dataset de cotizaciones
     """
-    new_data = bbands(data)
+    data = bbands(data)
     ap = [
           mpf.make_addplot(data['Banda_Inferior'], color='red'),
           mpf.make_addplot(data['Banda_Superior'], color='green'),
@@ -396,13 +396,11 @@ def plot_from(data, style='yahoo', title='', ylabel='', ylabel_lower='', savefig
             else:
                 mpf.plot(data, type=type, volume=volume, style=style, title=title, ylabel=ylabel, ylabel_lower=ylabel_lower, savefig=savefig+'.png', mav=(sma))
 
-def correlation(dataframes):
+def correlation(dataframes, names):
     """
     Recibe una lista de dataframes y devuelve las correlaciones entre pares de activos
     """
-    nombres_dataframes = [f'DF{i+1}' for i in range(len(dataframes))]
-
-    correlaciones = pd.DataFrame(index=nombres_dataframes, columns=nombres_dataframes)
+    correlaciones = pd.DataFrame(index=names, columns=names)
 
     for i, df1 in enumerate(dataframes):
         for j, df2 in enumerate(dataframes):
@@ -420,7 +418,7 @@ def correlation(dataframes):
 def compare(names):
     """
     Recibe una lista con los datos (df) de una o varias empresas con el mismo eje temporal y realiza una gráfica de lineas con todas
-    EL parámetro deben ser lista
+    EL parámetro debe ser una lista
     """
     # Genera los dataframes
     if isinstance(names, list):
@@ -448,8 +446,8 @@ def compare(names):
                          ylabel='Precio', title='Cotizaciones de Empresas', returnfig=True)
     axes[0].legend(names)    
 
-    correlation(dataframes)
-
+    correlation(dataframes, names)
+    
 #########################
 # Impacto de resultados #
 #########################
